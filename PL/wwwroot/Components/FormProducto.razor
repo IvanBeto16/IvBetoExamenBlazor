@@ -1,0 +1,197 @@
+﻿@page "/formproducto/{idProducto:int}"
+@inject NavigationManager Navigation
+@inject ILogger<Productos> Logger
+
+<h3 class="text-center">Registro / Actualizacion de productos</h3>
+<br />
+<br />
+<span>
+    Llene los campos solicitados para poder dar de alta un nuevo producto o actualizar alguno de los que ya estan registrados en el sistema.
+    Cuando termine, haga click en el botón de "Agregar Producto"
+</span>
+<hr />
+<EditForm Model="@Product" OnSubmit="@Submit" FormName="FormProductos">
+    <div class="row row-cols-2">
+        <div class="col-lg-6">
+            <label for="idProducto">No. de Producto</label>
+            <input type="text" class="form-control-sm" readonly @bind-value="Product.IdProducto"/>
+        </div>
+        <div class="col-lg-6">
+            <label for="Nombre">Nombre del Producto</label>
+            <input type="text" class="form-control-sm" placeholder="concha" @bind-value="Product.Nombre" />
+        </div>
+    </div>
+    <br />
+    <div class="row row-cols-2">
+        <div class="col-lg-6">
+            <label for=" Precio">Precio del Producto</label>
+            <input type="text" class="form-control-sm" placeholder="$0.00" @bind-value="Product.Precio" />
+        </div>
+        <div class="col-lg-6">
+            <label for="Categoria">Categoria del producto</label>
+            <select name="Categorias" class="form-control-sm" @bind="Product.Categoria.IdCategoria">
+                <option value="0">–Seleccione una categoria–</option>
+                @foreach (ML.Categoria categoria in categorias.Objects)
+                {
+                    <option value="@categoria.IdCategoria">
+                        @categoria.NombreCategoria
+                    </option>
+                }
+            </select>
+        </div>
+    </div>
+    <br />
+    <br />
+    <button class="btn btn-success" type="submit">Agregar Producto</button> <a class="btn btn-danger" href="Productos">Regresar a la vista</a>
+</EditForm>
+@if (OpenDialog)
+{
+    <Modal Title="Modal de Aviso" Text="Accion realizada correctamente y con exito" OnCerrar="@CierraModal"></Modal>
+}
+
+@code {
+
+    [Parameter]
+    public int idProducto { get; set; } = 0;
+
+    public static bool OpenDialog { get; set; } = false;
+
+    public ML.Producto Product { get; set; }
+    ML.Result categorias = GetCategorias();
+
+    protected override void OnInitialized()
+    {
+        Product = new ML.Producto();
+        Product.IdProducto = idProducto;
+        if(idProducto > 0)
+        {
+            ML.Result result = GetById(idProducto);
+            Product = (ML.Producto)result.Object;
+        }
+        else
+        {
+            Product = new ML.Producto();
+            Product.Categoria = new ML.Categoria();
+        }
+
+    }
+
+    //Funcion para mandar a llamar las funciones de agregar y actualizar según sea el caso
+    private void Submit()
+    {
+        //Se guardan los datos en sus respectivos campos
+        Logger.LogInformation("IdProducto = {IdProducto}", Product.IdProducto);
+        Logger.LogInformation("Nombre = {Nombre}", Product.Nombre);
+        Logger.LogInformation("Precio = {Precio}", Product.Precio);
+        Logger.LogInformation("IdCategoria = {IdCategoria}", Product.Categoria.IdCategoria);
+
+        if(Product.IdProducto == 0)
+        {
+            Add(Product);
+            OpenDialog = true;
+            Navigation.NavigateTo("/productos");
+        }
+        else
+        {
+            Update(Product);
+            OpenDialog = true;
+            Navigation.NavigateTo("/productos");
+        }
+    }
+
+    public static ML.Result GetById(int id)
+    {
+        ML.Result auxiliar = new ML.Result();
+        using(var client = new HttpClient())
+        {
+            client.BaseAddress = new Uri("http://localhost:5109/api/Producto");
+            var responseTask = client.GetAsync(client.BaseAddress + $"/GetBy/" + id);
+            responseTask.Wait();
+
+            var resul = responseTask.Result;
+            if (resul.IsSuccessStatusCode)
+            {
+                auxiliar.Object = new object();
+                var readTask = resul.Content.ReadAsAsync<ML.Result>();
+                readTask.Wait();
+
+                ML.Producto producto = Newtonsoft.Json.JsonConvert.DeserializeObject<ML.Producto>(readTask.Result.Object.ToString());
+                auxiliar.Object = producto;
+            }
+            return auxiliar;
+        }
+    }
+
+    public static void Add(ML.Producto productoNuevo)
+    {
+        using (var client = new HttpClient())
+        {
+            client.BaseAddress = new Uri("http://localhost:5109/api/Producto");
+            var responseTask = client.PostAsJsonAsync<ML.Producto>(client.BaseAddress + $"/Add", productoNuevo);
+            responseTask.Wait();
+
+            var final = responseTask.Result;
+            if (final.IsSuccessStatusCode)
+            {
+                OpenDialog = true;
+            }
+        }
+    }
+
+    public static void Update(ML.Producto productoNuevo)
+    {
+        using (var client = new HttpClient())
+        {
+            client.BaseAddress = new Uri("http://localhost:5109/api/Producto");
+            var responseTask = client.PutAsJsonAsync<ML.Producto>(client.BaseAddress + "/Update", productoNuevo);
+            responseTask.Wait();
+
+            var final = responseTask.Result;
+            if (final.IsSuccessStatusCode)
+            {
+                OpenDialog = true;
+            }
+        }
+    }
+
+    //Para poder traer todas las categorias con el servicio, se necesita la variable local y el consumo del serviciO
+
+    public static ML.Result GetCategorias()
+    {
+        ML.Result result = new ML.Result();
+        using(var client = new HttpClient())
+        {
+            client.BaseAddress = new Uri("http://localhost:5109/api/Categoria");
+            var responseTask = client.GetAsync(client.BaseAddress);
+            responseTask.Wait();
+
+            var resultService = responseTask.Result;
+            if (resultService.IsSuccessStatusCode)
+            {
+                result.Objects = new List<object>();
+                var readTask = resultService.Content.ReadAsAsync<ML.Result>();
+                readTask.Wait();
+
+                foreach(var item in readTask.Result.Objects)
+                {
+                    ML.Categoria categoria = Newtonsoft.Json.JsonConvert.DeserializeObject<ML.Categoria>(item.ToString());
+                    result.Objects.Add(categoria);
+                }
+            }
+            return result;
+        }
+    }
+
+    //Metodos para controlar el modal en blazor
+    private void OpenDeleteDialog()
+    {
+        OpenDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task CierraModal(bool aceptado)
+    {
+        OpenDialog = false;
+        StateHasChanged();
+    }
+}

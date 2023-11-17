@@ -1,0 +1,142 @@
+﻿@page "/productos"
+@inject IJSRuntime JsRuntime
+@inject NavigationManager Navigation
+
+<h3 class="text-center">Productos Registrados</h3>
+<br />
+<br />
+<span>Se muestran los productos registrados en el sistema y la categoria a la que corresponden.</span>
+<span>Para buscar componentes, escriba los caracteres o la palabra completa para buscar entre los productos por Nombre: </span>
+<input type="text" placeholder="concha" class="form-control-sm" @bind="Busqueda"/>
+<button class="btn btn-primary" type="submit" @onclick="() => GetAll()">Buscar</button>
+<hr />
+@if(createTable == false){
+    GetAll();
+    createTable = true;
+}
+<table class="table table-bordered table-responsive" id="myTabla">
+    <thead>
+        <tr>
+            <th>Editar Producto</th>
+            <th>Nombre del Producto</th>
+            <th>Precio en $ MXN</th>
+            <th>Categoria Correspondiente</th>
+            <th>Eliminar Producto</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach(ML.Producto producto in result.Objects)
+        {   
+            <tr>
+                <td><a class="btn btn-info" href="@($"formproducto/{producto.IdProducto}")" @onclick="() => NavigatetoComponent(producto.IdProducto)">Editar</a></td>
+                <td>@producto.Nombre</td>
+                <td>@producto.Precio</td>
+                <td>@producto.Categoria.NombreCategoria</td>
+                <td><a class="btn btn-danger" @onclick="() => DeleteSymbol(producto.IdProducto)">Eliminar</a></td>
+            </tr>
+        }
+    </tbody>
+</table>
+<hr />
+<span class="fw-bold">Total de productos registrados: @result.Objects.Count productos.</span>
+<br />
+<br />
+<span>Para agregar nuevo productos, haga click en el botón enseguida para llenar los campos necesarios y registrar un nuevo producto</span>  <a class="btn btn-success" href="@($"formproducto/{0}")">Agregar Producto</a>
+<br />
+<br />
+<br />
+@if (OpenDialog)
+{
+    <Modal Title="Modal de Aviso" Text="Se ha realizado la acción con exito" OnCerrar ="@CierraModal">
+    </Modal>
+}
+
+@code {
+    public static string? Busqueda { get; set; } = "";
+
+    public bool createTable { get; set; }
+
+    //Propiedad de bandera para abrir y cerrar el modal
+    public bool OpenDialog { get; set; } = false;
+
+    //Parte para la navegacion entre componentes
+    private void NavigatetoComponent(int id)
+    {
+        Navigation.NavigateTo("formproducto/"+id);
+    }
+
+    // static string toFind = "";
+    public ML.Result result = new ML.Result();
+
+    public void GetAll()
+    {
+        using(var client = new HttpClient())
+        {
+            client.BaseAddress = new Uri("http://localhost:5109/api");
+            var responseTask = client.GetAsync(client.BaseAddress + $"/Producto/GetProductos/" + Busqueda);
+            responseTask.Wait();
+
+            var correct = responseTask.Result;
+            if (correct.IsSuccessStatusCode)
+            {
+                result.Objects = new List<object>();
+                var readTask = correct.Content.ReadAsAsync<ML.Result>();
+                readTask.Wait();
+
+                foreach(var item in readTask.Result.Objects)
+                {
+                    ML.Producto resultItem = Newtonsoft.Json.JsonConvert.DeserializeObject<ML.Producto>(item.ToString());
+                    result.Objects.Add(resultItem);
+                }
+            }
+        }
+    }
+
+    //Metodo para invocar el servicio de eliminar productos
+    public static ML.Result Delete(int idProducto)
+    {
+        ML.Result result = new ML.Result();
+        using(var client = new HttpClient())
+        {
+            client.BaseAddress = new Uri("http://localhost:5109/api/Producto/");
+            var responseTask = client.DeleteAsync(client.BaseAddress + $"Delete/{idProducto}");
+            responseTask.Wait();
+
+            var resultService = responseTask.Result;
+            if (resultService.IsSuccessStatusCode)
+            {
+                result.Correct = true;
+            }
+            else
+            {
+                result.Correct = false;
+            }
+            return result;
+        }
+    }
+
+    //Metodo, usando inyeccion, para mostrar el modal del delete al eliminar elementos
+    async Task DeleteSymbol(int id)
+    {
+        bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Are you sure?");
+        if (confirmed)
+        {
+            // Delete!
+            ML.Result eliminar = Delete(id);
+            OpenDialog = true;
+        }
+    }
+
+    //Metodos para controlar el modal en blazor
+    private void OpenDeleteDialog()
+    {
+        OpenDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task CierraModal(bool aceptado)
+    {
+        OpenDialog = false;
+        StateHasChanged();
+    }
+}

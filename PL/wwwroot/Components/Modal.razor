@@ -1,0 +1,40 @@
+﻿<h3>Modal</h3>
+<div class="modal fade show" id="myModal"
+     style="display:block; background-color: rgba(10,10,10,.8);"
+     aria-modal="true" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">@Title</h4>
+                <button type="button" class="close" @onclick="() => ModalCancel()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>@Text</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" @onclick="() => ModalOk()">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+@code {
+    //Parametros que cambiarán dentro del modal dependiendo del contexto en el GETALL o el FORM
+    [Parameter]
+    public string Title { get; set; }
+    [Parameter]
+    public string Text { get; set; }
+
+    //Propiedad parametro para poder cerrar el modal
+    [Parameter]
+    public EventCallback<bool> OnCerrar { get; set; }
+
+    private Task ModalCancel()
+    {
+        return OnCerrar.InvokeAsync(false);
+    }
+
+    private Task ModalOk()
+    {
+        return OnCerrar.InvokeAsync(true);
+    }
+}
